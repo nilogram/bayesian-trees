@@ -105,8 +105,9 @@ class BayesianNode():
             best_split_kids_args = None
             
             if self.predictors_to_ignore != None:
-                n_predictors_to_ignore = round(
-                    len(self.predictors) * self.predictors_to_ignore
+                n_predictors_to_ignore = min(
+                    round(len(self.predictors) * self.predictors_to_ignore), 
+                    len(self.predictors) - 1
                 )
                 if n_predictors_to_ignore > 0:
                     idx_predictors_to_ignore = np.random.randint(
