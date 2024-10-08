@@ -68,8 +68,9 @@ class AdaBooster:
 
             active_predictors = []
             for i in range(n_predictors): 
-                if i in idx_predictors_to_remove:
-                    logger.info(f"Predictor {tree_kwargs['predictors'][i]} will be removed.")
+                if i in idx_predictors_to_remove:                    
+#                    logger.info(f"Predictor {tree_kwargs['predictors'][i]} will be removed.")
+                    pass
                 else:
                     active_predictors.append(tree_kwargs["predictors"][i])
             tree_kwargs["predictors"] = active_predictors
@@ -106,13 +107,19 @@ class AdaBooster:
             self.tree_weights.append(tree_weight)
 
     def predict_proba(self, X):
+        # This method corresponds to predict_proba in scikit-learn,
+        # which returns non-calibrated probablities.
+        # To calibrate the obtained probabilities a calibration function should be applied.
+        
         # Initialize cumulative predictions as zeros
         cumulative_pred = np.zeros((X.shape[0], 2))
 
         # Add the weighted contributions from each tree
         for tree, tree_weight in zip(self.trees, self.tree_weights):
-            tree_pred = tree.predict_proba(X).values  # Get the predicted probabilities
-            cumulative_pred += tree_weight * tree_pred  # Weighted sum of probabilities
+            # Get the predicted probabilities
+            tree_pred = tree.predict_proba(X).values
+            # Weighted sum of the probabilities
+            cumulative_pred += tree_weight * tree_pred
 
         # Normalize to ensure probabilities sum to 1
         cumulative_pred /= np.sum(cumulative_pred, axis=1)[:, np.newaxis]
@@ -121,11 +128,11 @@ class AdaBooster:
         )
 
         return pd.DataFrame(cumulative_pred, columns=self.outcomes)
-
-    def predict(self, X):
+    
+    def predict(self, X, threshold):
         """
         Predict class labels.
         """
         pos_outcome = self.outcomes[1]
         pred = self.predict_proba(X)
-        return (pred[pos_outcome] > 0.5).astype(int)
+        return (pred[pos_outcome] > threshold).astype(int)
