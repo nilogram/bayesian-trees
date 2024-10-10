@@ -180,14 +180,16 @@ class GradientBooster:
         
         return pd.DataFrame(np.column_stack([1 - prob_pred, prob_pred]), columns=self.outcomes)
 
-    def plot_losses(self, X=None, y=None):   
+    def plot_losses(self, X=None, y=None, title=None):   
         # If X is None, training set results are plotted.
         # y is ignored in this case.
         if X is None:
-            title = "Training Set Losses"
+            if title == None:
+                title = "Training Set Losses"
             ensemble_losses = self.train_ensemble_losses
         else:
-            title = "Testing Set Losses"
+            if title == None:
+                title = "Testing Set Losses"
             ensemble_losses = []
             
             pos_outcome = self.outcomes[1]
