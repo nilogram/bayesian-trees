@@ -4,20 +4,19 @@ import logging
 import numpy as np
 import pandas as pd
 
-from bayesian_tree import BayesianTree
-from tree_utils import get_log_loss
+from .bayesian_tree import BayesianTree
 
 logger = logging.getLogger(__name__)
 
 
 class AdaBooster:
     def __init__(
-        self, 
-        n_trees, 
-        learning_rate, 
-        predictors_to_remove, 
-        random_state, 
-        min_prediction=1e-6, 
+        self,
+        n_trees,
+        learning_rate,
+        predictors_to_remove,
+        random_state,
+        min_prediction=1e-6,
         **tree_kwargs
     ):
         self.n_trees = n_trees
@@ -25,28 +24,28 @@ class AdaBooster:
         self.predictors_to_remove = predictors_to_remove
         self.min_prediction = min_prediction
         self.tree_kwargs = tree_kwargs
-        
+
         self.trees = []
-        self.tree_weights = [] 
+        self.tree_weights = []
         self.outcomes = []
-        
+
         np.random.seed(random_state)
 
     def fit(self, X, y):
         assert y.shape[1] == 2
         self.outcomes = y.columns.to_list()
         pos_outcome = self.outcomes[1]
-        
+
         if "predictors" not in self.tree_kwargs:
             self.tree_kwargs["predictors"] = X.columns.to_list()
-        
+
         n_predictors = len(self.tree_kwargs["predictors"])
         n_predictors_to_remove = round(n_predictors * self.predictors_to_remove)
         if n_predictors_to_remove == 0:
             logger.warning("No predictor will be fully removed in any stage.")
         if n_predictors_to_remove >= n_predictors:
-            raise ValueError("All the predictors should be removed.") 
-        
+            raise ValueError("All the predictors should be removed.")
+
         n_samples = X.shape[0]
         # Initialize the sample weights equally
         sample_weights = np.ones(n_samples)
@@ -55,7 +54,7 @@ class AdaBooster:
             logger.info(f"Building tree #{i}...")
 
             tree_kwargs = copy.deepcopy(self.tree_kwargs)
-            
+
             # Remove up to n_predictors_to_remove
             if n_predictors_to_remove > 0:
                 idx_predictors_to_remove = np.random.randint(
@@ -67,14 +66,14 @@ class AdaBooster:
                 idx_predictors_to_remove = []
 
             active_predictors = []
-            for i in range(n_predictors): 
-                if i in idx_predictors_to_remove:                    
-#                    logger.info(f"Predictor {tree_kwargs['predictors'][i]} will be removed.")
+            for j in range(n_predictors):
+                if j in idx_predictors_to_remove:
+#                    logger.info(f"Predictor {tree_kwargs['predictors'][j]} will be removed.")
                     pass
                 else:
-                    active_predictors.append(tree_kwargs["predictors"][i])
+                    active_predictors.append(tree_kwargs["predictors"][j])
             tree_kwargs["predictors"] = active_predictors
-            
+
             # Fit a BayesianTree to the weighted dataset
             tree = BayesianTree(**tree_kwargs)
             tree.fit(X, y * sample_weights[:, np.newaxis])
@@ -108,9 +107,9 @@ class AdaBooster:
 
     def predict_proba(self, X):
         # This method corresponds to predict_proba in scikit-learn,
-        # which returns non-calibrated probablities.
-        # To calibrate the obtained probabilities a calibration function should be applied.
-        
+        # which returns non-calibrated probabilities.
+        # To calibrate the obtained probabilities, a calibration function should be applied.
+
         # Initialize cumulative predictions as zeros
         cumulative_pred = np.zeros((X.shape[0], 2))
 
@@ -128,7 +127,7 @@ class AdaBooster:
         )
 
         return pd.DataFrame(cumulative_pred, columns=self.outcomes)
-    
+
     def predict(self, X, threshold):
         """
         Predict class labels.
