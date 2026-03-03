@@ -1,4 +1,4 @@
-from typing import List, Optional, Tuple
+from typing import Optional, Tuple
 
 import numpy as np
 import pandas as pd
@@ -16,7 +16,7 @@ def plot_actual_vs_predicted(
     **kwargs,
 ):
     """
-    Plots the actual averages vs the predicted ones.
+    Plots the actual averages vs. the predicted ones.
 
     :param predicted: the predicted averages per bin
     :param actual: the actual averages per bin
@@ -40,10 +40,10 @@ def plot_actual_vs_predicted(
 
 
 def plot_performance_chart(
-    predictions: pd.DataFrame, 
+    predictions: pd.DataFrame,
     actual: pd.DataFrame,
     outcome: str,
-    bin_size: int = 100, 
+    bin_size: int = 100,
     log_loss: Optional[float] = None
 ) -> Tuple[Figure, pd.DataFrame]:
     plot_data = pd.concat([predictions[outcome], actual[outcome]], axis=1)
@@ -51,11 +51,11 @@ def plot_performance_chart(
     plot_data.sort_values("predicted", inplace=True, ignore_index=True)
     plot_data["bin"] = (plot_data.index.to_numpy() / bin_size).astype(int)
     plot_data = plot_data.groupby("bin").agg({"predicted": "mean", "actual": "mean"})
-    
+
     title = f"Predictions of the Probability of '{outcome}' Class\nBin Size = {bin_size}"
     if log_loss is not None:
         title += f"\nLog-Loss: {log_loss:.4f}"
-    
+
     f = plot_actual_vs_predicted(
         plot_data["predicted"],
         plot_data["actual"],

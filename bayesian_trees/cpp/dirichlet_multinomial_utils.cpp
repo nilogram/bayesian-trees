@@ -26,7 +26,7 @@ double lgamma(double x) {
 
 
 double dirichlet_multinomial_logl(
-    const std::vector<std::vector<double>>& counts, 
+    const std::vector<std::vector<double>>& counts,
     const std::vector<double>& alpha
 ) {
     int N = counts.size();  // number of samples
@@ -47,7 +47,7 @@ double dirichlet_multinomial_logl(
 
 
 std::vector<double> dirichlet_multinomial_grad(
-    const std::vector<std::vector<double>>& counts, 
+    const std::vector<std::vector<double>>& counts,
     const std::vector<double>& alpha
 ) {
     int N = counts.size();     // number of samples
@@ -60,9 +60,9 @@ std::vector<double> dirichlet_multinomial_grad(
             double counts_sum = std::accumulate(counts[n].begin(), counts[n].end(), 0.0);
             res[k] += (
                 digamma(alpha_sum)
-                - digamma(counts_sum + alpha_sum)  
+                - digamma(counts_sum + alpha_sum)
                 + digamma(counts[n][k] + alpha[k])
-                - digamma(alpha[k]) 
+                - digamma(alpha[k])
             );
         }
     }
@@ -72,12 +72,12 @@ std::vector<double> dirichlet_multinomial_grad(
 
 
 py::dict dirichlet_multinomial_mle(
-    const std::vector<std::vector<double>>& counts, 
-    const std::vector<double>& alpha_init = {}, 
-    double tol = 1e-10, 
+    const std::vector<std::vector<double>>& counts,
+    const std::vector<double>& alpha_init = {},
+    double tol = 1e-10,
     int max_iter = 100000,
     double min_alpha = 1e-6
-) {    
+) {
     int N = counts.size();              // number of samples
     int K = counts[0].size();           // number of categories
     std::vector<double> alpha(K, 1.0);  // non-informative prior
@@ -91,7 +91,7 @@ py::dict dirichlet_multinomial_mle(
         std::vector<double> alpha_new(K);
         double alpha_sum = std::accumulate(alpha.begin(), alpha.end(), 0.0);
         std::vector<double> counts_alpha_sum(N);
-        
+
         for (int k = 0; k < K; ++k) {
             double numerator = 0.0;
             double denominator = 0.0;
@@ -105,51 +105,51 @@ py::dict dirichlet_multinomial_mle(
                 alpha_new[k] = min_alpha;
             }
         }
-                
+
         double max_diff = 0.0;
         for (int k = 0; k < K; ++k) {
             max_diff = std::max(max_diff, std::abs(alpha_new[k] - alpha[k]));
         }
-        
+
         alpha = alpha_new;
         ++iter;
-        
+
         if (max_diff < tol) {
             break;
         }
     }
 
-    py::dict result;    
+    py::dict result;
     result["alpha"] = alpha;
     result["gradient"] = dirichlet_multinomial_grad(counts, alpha);
     result["iter"] = iter;
-    
+
     return result;
 }
 
 
 PYBIND11_MODULE(dirichlet_multinomial_utils, m) {
     m.def(
-        "dirichlet_multinomial_mle", 
-        &dirichlet_multinomial_mle, 
-        py::arg("counts"), 
-        py::arg("alpha_init") = std::vector<double>{}, 
-        py::arg("tol") = 1e-10, 
+        "dirichlet_multinomial_mle",
+        &dirichlet_multinomial_mle,
+        py::arg("counts"),
+        py::arg("alpha_init") = std::vector<double>{},
+        py::arg("tol") = 1e-10,
         py::arg("max_iter") = 100000,
         py::arg("min_alpha") = 1e-6
     );
-    
+
     m.def(
-        "dirichlet_multinomial_logl", 
-        &dirichlet_multinomial_logl, 
-        py::arg("counts"), 
+        "dirichlet_multinomial_logl",
+        &dirichlet_multinomial_logl,
+        py::arg("counts"),
         py::arg("alpha")
     );
 
     m.def(
-        "dirichlet_multinomial_grad", 
-        &dirichlet_multinomial_grad, 
-        py::arg("counts"), 
+        "dirichlet_multinomial_grad",
+        &dirichlet_multinomial_grad,
+        py::arg("counts"),
         py::arg("alpha")
     );
 }

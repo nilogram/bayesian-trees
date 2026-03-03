@@ -10,7 +10,7 @@ class SigmoidCalibrator:
     def fit(self, predicted_probs, y):
         """
         Fit the sigmoid calibration model using predicted probabilities and true labels.
-        
+
         Parameters:
         predicted_probs: The predicted probabilities or decision function outputs
                          from the prefitted model (array-like of shape (n_samples, 2)).
@@ -22,11 +22,11 @@ class SigmoidCalibrator:
     def predict_proba(self, predicted_probs):
         """
         Calibrate the predicted probabilities using the sigmoid calibration model.
-        
+
         Parameters:
         predicted_probs: The predicted probabilities or decision function outputs
                          from the prefitted model(array-like of shape (n_samples, 2)).
-        
+
         Returns:
                          Calibrated probabilities (array of shape (n_samples, 2)).
         """
