@@ -15,6 +15,7 @@ class BayesianNode:
         parent,
         val,
         predictors,
+        fixed_hierarchy,
         split_method,
         prior_method,
         prior_alpha,
@@ -31,27 +32,12 @@ class BayesianNode:
         predictors_to_ignore,
         write_log
     ):
-        if split_method not in ("gain", "gain_ratio"):
-            raise ValueError(f"Unsupported value of 'split_method': {split_method}")
-
-        if prior_method not in ("mle", "counting"):
-            raise ValueError(f"Unsupported value of 'prior_method': {prior_method}")
-
-        if prior_method == "counting" and min_smooth_obs is not None:
-            raise ValueError(
-                "If 'prior_method' equals to 'counting', 'min_smooth_obs' must be None."
-            )
-
-        if prior_method == "mle" and min_smooth_obs is None:
-            raise ValueError(
-                "If 'prior_method' equals to 'mle', 'min_smooth_obs' must be positive."
-            )
-
         self.parent = parent
         # the value of self.parent.split_attr that corresponds to this node
         self.val = val
         # the predictors to test for splitting this node
         self.predictors = predictors
+        self.fixed_hierarchy = fixed_hierarchy
         self.split_method = split_method
         self.prior_method = prior_method
         self.prior_alpha = np.array(prior_alpha)
@@ -94,7 +80,7 @@ class BayesianNode:
             )
             self.logl = -np.dot(counts, np.log(self.estimate)) / trials
 
-        # the condition below is a necessary condition for splitting the node
+        # The condition below is a necessary condition for splitting the node
         if (
             (self.max_level is None or self.level < self.max_level)
             and len(self.predictors) > 0
@@ -104,16 +90,19 @@ class BayesianNode:
             best_split_attr = None
             best_split_kids_args = None
 
-            if self.predictors_to_ignore is not None:
+            # Selects random predictors to ignore for randomized splitting;
+            # ensures at least one predictor remains
+            if not self.fixed_hierarchy and self.predictors_to_ignore is not None:
                 n_predictors_to_ignore = min(
                     round(len(self.predictors) * self.predictors_to_ignore),
                     len(self.predictors) - 1
                 )
+                # Generates random predictor indices to ignore (up to n_predictors_to_ignore)
                 if n_predictors_to_ignore > 0:
                     idx_predictors_to_ignore = np.random.randint(
                         low=0, high=len(self.predictors), size=n_predictors_to_ignore
                     )
-                    # remove duplicates
+                    # Removes duplicates
                     idx_predictors_to_ignore = np.unique(idx_predictors_to_ignore)
                     if len(idx_predictors_to_ignore) == len(self.predictors):
                         idx_predictors_to_ignore = np.delete(
@@ -125,25 +114,29 @@ class BayesianNode:
             else:
                 idx_predictors_to_ignore = []
 
+            # Evaluates predictors; selects the best split by gain or gain ratio;
+            # recurses on children
             for i, split_attr in enumerate(self.predictors):
-                if i in idx_predictors_to_ignore:
+                if i in idx_predictors_to_ignore or (self.fixed_hierarchy and i > 0):
                     continue
                 unique_split_attr_vals = X[split_attr].dropna().unique()
                 kids_predictors = self.predictors.copy()
                 kids_predictors.remove(split_attr)
 
-                # if there is more than 1 kid, try to split the node
+                # tries to split the node if there is more than 1 child
                 if len(unique_split_attr_vals) > 1:
                     split_gain = self.logl
                     split_info = 0.0
 
-                    # calculate prior for the kids
+                    # calculates prior for children
                     if self.prior_method == "mle":
                         if trials >= self.min_smooth_obs:
                             mle_fit = dirichlet_multinomial_mle(
                                 counts=(
                                     pd.concat([X[split_attr], y], axis=1)
-                                    .groupby(split_attr, as_index=True, dropna=False)
+                                    .groupby(
+                                        split_attr, as_index=True, dropna=False, observed=True
+                                    )
                                     .agg({c: "sum" for c in y.columns})
                                     .values
                                     .tolist()
@@ -163,6 +156,7 @@ class BayesianNode:
                         kids_prior_alpha *= self.prior_cap / kids_prior_alpha.sum()
 
                     kids_args = []
+                    # Builds parameter sets for child nodes; computes split gain and info
                     for split_attr_val in unique_split_attr_vals:
                         kid_mask = X[split_attr] == split_attr_val
                         kid_X = X[kid_mask]
@@ -181,6 +175,7 @@ class BayesianNode:
                                 "parent": self,
                                 "val": split_attr_val,
                                 "predictors": kids_predictors,
+                                "fixed_hierarchy": self.fixed_hierarchy,
                                 "split_method": self.split_method,
                                 "prior_method": self.prior_method,
                                 "prior_alpha": kids_prior_alpha,
@@ -204,13 +199,14 @@ class BayesianNode:
                         split_gain -= kid_trials / trials * kid_logl
                         split_info -= kid_trials / trials * np.log(kid_trials / trials)
 
-                    # we should add the term that corresponds to the instances of the node,
-                    # for which the splitting attribute is missing
+                    # We should account for the contribution of instances
+                    # for which the splitting attribute is missing.
                     missing_split_attr_mask = X[split_attr].isna()
                     missing_split_attr_X = X[missing_split_attr_mask]
                     missing_split_attr_y = y[missing_split_attr_mask]
                     missing_split_attr_counts = missing_split_attr_y.values.sum(axis=0)
                     missing_split_attr_trials = missing_split_attr_counts.sum()
+                    # Subtracts the missing data contribution from split gain and split info
                     if missing_split_attr_trials > 0:
                         missing_split_attr_logl = (
                             -np.dot(missing_split_attr_counts, np.log(self.estimate))
@@ -276,6 +272,7 @@ class BayesianTree:
         prior_cap,
         min_smooth_obs,
         predictors=None,
+        fixed_hierarchy=False,
         tol=1e-10,
         max_iter=10000,
         min_alpha=1e-6,
@@ -285,6 +282,44 @@ class BayesianTree:
         predictors_to_ignore=None,
         write_log=False
     ):
+        if fixed_hierarchy:
+            if max_level is not None:
+                raise ValueError(
+                    f"If 'fixed_hierarchy' is True, 'max_level' must be None."
+                )
+            if predictors_to_ignore is not None:
+                raise ValueError(
+                    "If 'fixed_hierarchy' is True, 'predictors_to_ignore' must be None."
+                )
+
+        if split_method not in ("gain", "gain_ratio"):
+            raise ValueError(f"Unsupported value of 'split_method': {split_method}")
+
+        if prior_method not in ("mle", "counting"):
+            raise ValueError(f"Unsupported value of 'prior_method': {prior_method}")
+
+        if prior_method == "counting" and min_smooth_obs is not None:
+            raise ValueError(
+                "If 'prior_method' equals to 'counting', 'min_smooth_obs' must be None."
+            )
+
+        if prior_method == "mle" and min_smooth_obs is None:
+            raise ValueError(
+                "If 'prior_method' equals to 'mle', 'min_smooth_obs' must be positive."
+            )
+
+        if tol <= 0.0:
+            raise ValueError(f"'tol' must be positive: {tol}")
+
+        if min_alpha <= 0.0:
+            raise ValueError(f"'min_alpha' must be positive: {min_alpha}")
+
+        if min_improvement < 0.0:
+            raise ValueError(f"'min_improvement' must be non-negative: {min_improvement}")
+
+        if max_level is not None and max_level < 1:
+            raise ValueError(f"'max_level' must be None or >= 1: {max_level}")
+
         self.kwargs = {}
         self.kwargs["split_method"] = split_method
         self.kwargs["prior_method"] = prior_method
@@ -292,6 +327,7 @@ class BayesianTree:
         self.kwargs["prior_cap"] = prior_cap
         self.kwargs["min_smooth_obs"] = min_smooth_obs
         self.kwargs["predictors"] = predictors
+        self.kwargs["fixed_hierarchy"] = fixed_hierarchy
         self.kwargs["tol"] = tol
         self.kwargs["max_iter"] = max_iter
         self.kwargs["min_alpha"] = min_alpha

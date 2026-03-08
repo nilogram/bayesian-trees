@@ -1,0 +1,6 @@
+# --- Examples (sdist only) ---
+recursive-include notebooks *.ipynb
+recursive-include datasets *
+
+# --- C++ sources (sdist only too; wheel will include via package_data) ---
+include bayesian_trees/cpp/dirichlet_multinomial_utils.cpp
